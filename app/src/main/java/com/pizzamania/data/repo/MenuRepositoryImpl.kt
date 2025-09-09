@@ -1,7 +1,6 @@
 package com.pizzamania.data.repo
 
 import com.google.firebase.firestore.FirebaseFirestore
-import com.pizzamania.data.model.MenuItem
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow

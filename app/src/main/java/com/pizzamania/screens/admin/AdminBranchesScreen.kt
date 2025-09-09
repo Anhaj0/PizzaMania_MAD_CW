@@ -30,7 +30,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
-import com.pizzamania.data.model.Branch
 import com.pizzamania.data.repo.BranchRepository
 import com.pizzamania.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel

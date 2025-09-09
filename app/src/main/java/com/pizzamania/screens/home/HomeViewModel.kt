@@ -10,7 +10,6 @@ import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.firebase.firestore.GeoPoint
-import com.pizzamania.data.model.Branch
 import com.pizzamania.data.repo.BranchRepository
 import com.pizzamania.util.distanceKm
 import dagger.hilt.android.lifecycle.HiltViewModel

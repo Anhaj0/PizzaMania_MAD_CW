@@ -1,7 +1,5 @@
 package com.pizzamania.data.repo
 
-import com.pizzamania.data.local.CartDao
-import com.pizzamania.data.local.CartItem
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
