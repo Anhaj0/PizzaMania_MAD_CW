@@ -1,5 +1,6 @@
 package com.pizzamania.data.repo
 
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.pizzamania.data.model.MenuItem
 import kotlinx.coroutines.channels.awaitClose
@@ -18,36 +19,40 @@ class MenuRepositoryImpl @Inject constructor(
         .document(branchId)
         .collection("menuItems")
 
+    /** Patch legacy docs (fallback title from "name", ensure id). */
+    private fun patched(doc: DocumentSnapshot): MenuItem {
+        val item = doc.toObject(MenuItem::class.java) ?: MenuItem()
+
+        // Ensure id
+        if (item.id.isNullOrBlank()) item.id = doc.id
+
+        // Ensure title (fallback from legacy "name")
+        if (item.title.isNullOrBlank()) {
+            val fromDoc = doc.getString("title") ?: doc.getString("name")
+            item.title = if (!fromDoc.isNullOrBlank()) fromDoc else "Untitled"
+        }
+        // Ensure price is not NaN (rare malformed docs)
+        if (item.price.isNaN()) item.price = 0.0
+
+        return item
+    }
+
     override fun listenMenu(branchId: String): Flow<List<MenuItem>> = callbackFlow {
         val reg = col(branchId).addSnapshotListener { snap, e ->
-            if (e != null) {
-                trySend(emptyList())
-                return@addSnapshotListener
-            }
-            val list = snap?.documents?.mapNotNull { d ->
-                val item = d.toObject(MenuItem::class.java)
-                if (item != null) {
-                    if (item.id.isBlank()) item.id = d.id  // Java getter/setter exposed as Kotlin property
-                    item
-                } else null
-            } ?: emptyList()
-            trySend(list)
+            if (e != null) { trySend(emptyList()); return@addSnapshotListener }
+            trySend(snap?.documents?.map { patched(it) } ?: emptyList())
         }
         awaitClose { reg.remove() }
     }
 
-    override suspend fun getMenuItemOnce(branchId: String, itemId: String): MenuItem? {
-        val d = col(branchId).document(itemId).get().await()
-        val item = d.toObject(MenuItem::class.java)
-        if (item != null && item.id.isBlank()) item.id = d.id
-        return item
-    }
+    override suspend fun getMenuItemOnce(branchId: String, itemId: String): MenuItem? =
+        col(branchId).document(itemId).get().await().let { if (it.exists()) patched(it) else null }
 
     override suspend fun addMenuItem(branchId: String, item: MenuItem) {
-        val ref = if (item.id.isBlank()) col(branchId).document() else col(branchId).document(item.id)
+        val ref = if (item.id.isNullOrBlank()) col(branchId).document() else col(branchId).document(item.id!!)
         val toSave = MenuItem(
             ref.id,
-            item.title,
+            item.title ?: "Untitled",
             item.description,
             item.price,
             item.isAvailable,
@@ -57,17 +62,16 @@ class MenuRepositoryImpl @Inject constructor(
     }
 
     override suspend fun updateMenuItem(branchId: String, item: MenuItem) {
-        require(item.id.isNotBlank()) { "item.id missing" }
-        val ref = col(branchId).document(item.id)
+        require(!item.id.isNullOrBlank()) { "item.id missing" }
         val toSave = MenuItem(
-            item.id,
-            item.title,
+            item.id!!,
+            item.title ?: "Untitled",
             item.description,
             item.price,
             item.isAvailable,
             item.imageUrl
         )
-        ref.set(toSave).await()
+        col(branchId).document(item.id!!).set(toSave).await()
     }
 
     override suspend fun deleteMenuItem(branchId: String, itemId: String) {

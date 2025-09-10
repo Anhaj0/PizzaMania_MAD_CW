@@ -14,22 +14,25 @@ class CartRepository @Inject constructor(
 ) {
     fun observeCart(branchId: String): Flow<List<CartItem>> = dao.observeCart(branchId)
 
+    /**
+     * Adds to cart. If the SAME item with SAME options already exists, increments its qty.
+     */
     suspend fun addOrIncrement(
         branchId: String,
         itemId: String,
         name: String,
-        price: Double,
+        computedUnitPrice: Double,
         imageUrl: String?,
-        qty: Int
+        qty: Int,
+        size: String,
+        extrasCsv: String?
     ) = withContext(Dispatchers.IO) {
-        val existing = dao.getItem(branchId, itemId)
+        val existing = dao.getItemWithOptions(branchId, itemId, size, extrasCsv ?: "")
         if (existing == null) {
-            dao.insert(CartItem(itemId, branchId, name, price, qty, imageUrl))
+            dao.insert(CartItem(itemId, branchId, name, computedUnitPrice, qty, imageUrl, size, extrasCsv))
         } else {
             existing.qty = existing.qty + qty
-            existing.price = price
-            existing.name = name
-            existing.imageUrl = imageUrl
+            existing.price = computedUnitPrice // keep last computed unit price
             dao.update(existing)
         }
     }

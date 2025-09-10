@@ -14,11 +14,14 @@ import kotlinx.coroutines.flow.Flow;
 @Dao
 public interface CartDao {
 
-    @Query("SELECT * FROM cart_items WHERE branchId = :branchId")
+    @Query("SELECT * FROM cart_items WHERE branchId = :branchId ORDER BY localId DESC")
     Flow<List<CartItem>> observeCart(String branchId);
 
-    @Query("SELECT * FROM cart_items WHERE branchId = :branchId AND itemId = :itemId LIMIT 1")
-    CartItem getItem(String branchId, String itemId);
+    // the *exact* same item+options to merge quantities
+    @Query("SELECT * FROM cart_items " +
+            "WHERE branchId = :branchId AND itemId = :itemId AND size = :size AND IFNULL(extrasCsv,'') = IFNULL(:extrasCsv,'') " +
+            "LIMIT 1")
+    CartItem getItemWithOptions(String branchId, String itemId, String size, String extrasCsv);
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insert(CartItem item);

@@ -3,13 +3,17 @@ package com.pizzamania.screens.admin
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.navigation.NavController
 import com.pizzamania.data.model.Order
 import com.pizzamania.data.model.OrderStatus
 import com.pizzamania.data.repo.OrderRepository
@@ -42,22 +46,43 @@ class AdminOrdersViewModel @Inject constructor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AdminOrdersScreen(vm: AdminOrdersViewModel = hiltViewModel()) {
+fun AdminOrdersScreen(
+    navController: NavController, // Fix: Added NavController for back navigation.
+    vm: AdminOrdersViewModel = hiltViewModel()
+) {
     val orders by vm.orders.collectAsState()
 
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text("Admin • Orders") }) }
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Admin • Orders") },
+                // Fix: Added back button.
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                }
+            )
+        }
     ) { inner ->
         if (orders.isEmpty()) {
+            // Fix: Improved empty state UI.
             Box(
                 modifier = Modifier
                     .padding(inner)
                     .fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    "No orders yet",
-                    modifier = Modifier.padding(16.dp)
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "No orders yet",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                    Button(onClick = { navController.popBackStack() }) {
+                        Text("Go Back")
+                    }
+                }
             }
         } else {
             LazyColumn(

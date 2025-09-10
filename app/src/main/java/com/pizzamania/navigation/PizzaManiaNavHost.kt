@@ -105,6 +105,7 @@ fun PizzaManiaNavHost(navController: NavHostController) {
         }
 
         // Admin: orders
-        composable(Routes.AdminOrders) { AdminOrdersScreen() }
+        // Fix: Pass NavController to AdminOrdersScreen.
+        composable(Routes.AdminOrders) { AdminOrdersScreen(navController) }
     }
 }

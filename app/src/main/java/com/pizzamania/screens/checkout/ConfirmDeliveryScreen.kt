@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -35,7 +37,7 @@ class ConfirmViewModel @Inject constructor(
             "items" to items.map {
                 mapOf(
                     "itemId" to it.itemId,
-                    "title"  to it.name,
+                    "title"  to it.name,   // use "title" in orders model
                     "price"  to it.price,
                     "qty"    to it.qty
                 )
@@ -69,7 +71,16 @@ fun ConfirmDeliveryScreen(
     val scroll = rememberScrollState()
 
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text("Delivery details") }) },
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Delivery details") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        },
         bottomBar = {
             Button(
                 onClick = {

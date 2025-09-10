@@ -2,12 +2,14 @@ package com.pizzamania.screens.admin
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -24,7 +26,6 @@ import javax.inject.Inject
 class AdminMenuEditViewModel @Inject constructor(
     private val repo: MenuRepository
 ) : ViewModel() {
-
     var existing by mutableStateOf<MenuItem?>(null); private set
     var loading by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null); private set
@@ -57,9 +58,7 @@ fun AdminMenuEditScreen(
     val vm: AdminMenuEditViewModel = hiltViewModel()
     val ctx = LocalContext.current
 
-    LaunchedEffect(itemId) {
-        if (itemId != null) vm.load(branchId, itemId)
-    }
+    LaunchedEffect(itemId) { if (itemId != null) vm.load(branchId, itemId) }
 
     var title by remember { mutableStateOf("") }
     var desc by remember { mutableStateOf("") }
@@ -69,7 +68,7 @@ fun AdminMenuEditScreen(
 
     LaunchedEffect(vm.existing) {
         vm.existing?.let {
-            title = it.title
+            title = it.title ?: ""
             desc = it.description ?: ""
             price = if (it.price == 0.0) "" else it.price.toString()
             available = it.isAvailable
@@ -82,7 +81,12 @@ fun AdminMenuEditScreen(
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(if (itemId == null) "New menu item" else "Edit menu item") }
+                title = { Text(if (itemId == null) "New menu item" else "Edit menu item") },
+                navigationIcon = {
+                    IconButton(onClick = { nav.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
             )
         }
     ) { inner ->
@@ -93,17 +97,14 @@ fun AdminMenuEditScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-
             OutlinedTextField(
                 value = title, onValueChange = { title = it },
                 label = { Text("Title") }, singleLine = true, modifier = Modifier.fillMaxWidth()
             )
-
             OutlinedTextField(
                 value = desc, onValueChange = { desc = it },
                 label = { Text("Description") }, modifier = Modifier.fillMaxWidth()
             )
-
             OutlinedTextField(
                 value = price,
                 onValueChange = { price = it.filter { c -> c.isDigit() || c == '.' } },
@@ -112,13 +113,10 @@ fun AdminMenuEditScreen(
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
             )
-
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Available")
-                Spacer(Modifier.width(8.dp))
+                Text("Available"); Spacer(Modifier.width(8.dp))
                 Switch(checked = available, onCheckedChange = { available = it })
             }
-
             OutlinedTextField(
                 value = imageUrl, onValueChange = { imageUrl = it.trim() },
                 label = { Text("Image URL (paste)") },
@@ -126,9 +124,7 @@ fun AdminMenuEditScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            if (vm.error != null) {
-                Text("Error: ${vm.error}", color = MaterialTheme.colorScheme.error)
-            }
+            if (vm.error != null) Text("Error: ${vm.error}", color = MaterialTheme.colorScheme.error)
 
             Spacer(Modifier.height(8.dp))
 
@@ -136,13 +132,14 @@ fun AdminMenuEditScreen(
                 Button(
                     onClick = {
                         if (title.isBlank() || price.isBlank()) {
-                            toast("Title and price are required")
-                            return@Button
+                            toast("Title and price are required"); return@Button
                         }
                         val priceD = price.toDoubleOrNull() ?: run {
                             toast("Invalid price"); return@Button
                         }
 
+                        // NOTE: Java constructor => positional args only (no named args), and
+                        // description/imageUrl are @Nullable so we can pass null safely.
                         val built = MenuItem(
                             itemId ?: "",
                             title.trim(),
@@ -154,13 +151,13 @@ fun AdminMenuEditScreen(
 
                         if (itemId == null) {
                             vm.viewModelScope.launch {
-                                try { vm.saveNew(branchId, built); toast("Saved"); nav.popBackStack() }
-                                catch (e: Exception) { toast(e.message ?: "Save failed") }
+                                try {
+                                    vm.saveNew(branchId, built); toast("Saved"); nav.popBackStack()
+                                } catch (e: Exception) { toast(e.message ?: "Save failed") }
                             }
                         } else {
                             vm.viewModelScope.launch {
                                 try {
-                                    built.id = itemId
                                     vm.saveEdit(branchId, built); toast("Updated"); nav.popBackStack()
                                 } catch (e: Exception) { toast(e.message ?: "Update failed") }
                             }

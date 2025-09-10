@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -61,6 +62,12 @@ fun AdminBranchesScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Admin • Branches") },
+                // Fix: Added back button for better navigation.
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                },
                 actions = {
                     IconButton(onClick = { navController.navigate(Routes.AdminOrders) }) {
                         Icon(Icons.Filled.List, contentDescription = "Orders")

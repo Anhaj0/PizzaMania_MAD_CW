@@ -3,6 +3,8 @@ package com.pizzamania.screens.admin
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -53,7 +55,16 @@ fun AdminMenusScreen(
     LaunchedEffect(branchId) { vm.listen(branchId) }
 
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text("Admin • Menus") }) },
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Admin • Menus") },
+                navigationIcon = {
+                    IconButton(onClick = { nav.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = { nav.navigate("admin/branch/$branchId/menu/new") }) {
                 Text("+")
@@ -70,9 +81,8 @@ fun AdminMenusScreen(
             }
             LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(vm.items) { m ->
-                    Card(onClick = {
-                        nav.navigate("admin/branch/$branchId/menu/${m.id}")
-                    }) {
+                    val title = m.title ?: "Untitled"
+                    Card(onClick = { nav.navigate("admin/branch/$branchId/menu/${m.id}") }) {
                         Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             AsyncImage(
                                 model = m.imageUrl,
@@ -80,7 +90,7 @@ fun AdminMenusScreen(
                                 modifier = Modifier.size(56.dp)
                             )
                             Column(Modifier.weight(1f)) {
-                                Text(m.title, style = MaterialTheme.typography.titleMedium)
+                                Text(title, style = MaterialTheme.typography.titleMedium)
                                 Text("Rs. ${m.price}", style = MaterialTheme.typography.bodyMedium)
                                 if (!m.isAvailable) Text("Unavailable", color = MaterialTheme.colorScheme.error)
                             }

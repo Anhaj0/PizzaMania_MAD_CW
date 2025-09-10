@@ -16,7 +16,9 @@ import javax.inject.Singleton
 object DatabaseModule {
     @Provides @Singleton
     fun provideDb(@ApplicationContext ctx: Context): AppDatabase =
-        Room.databaseBuilder(ctx, AppDatabase::class.java, "pizzamania.db").build()
+        Room.databaseBuilder(ctx, AppDatabase::class.java, "pizzamania.db")
+            .fallbackToDestructiveMigration()   // ⬅️ avoid dev crashes on schema change
+            .build()
 
     @Provides
     fun provideCartDao(db: AppDatabase): CartDao = db.cartDao()

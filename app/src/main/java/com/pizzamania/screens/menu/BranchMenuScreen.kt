@@ -1,71 +1,114 @@
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class
+)
+
 package com.pizzamania.screens.menu
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.pizzamania.data.model.MenuItem
-import com.pizzamania.data.repo.CartRepository
-import com.pizzamania.data.repo.MenuRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlin.math.max
+import com.pizzamania.data.model.MenuItem
+import com.pizzamania.data.repo.MenuRepository
+import com.pizzamania.data.repo.CartRepository
 
+// ---------- UI state ----------
+data class BranchMenuUiState(
+    val loading: Boolean = true,
+    val error: String? = null,
+    val items: List<MenuItem> = emptyList()
+)
+
+// ---------- VM ----------
 @HiltViewModel
 class BranchMenuViewModel @Inject constructor(
     private val repo: MenuRepository,
     private val cart: CartRepository
 ) : ViewModel() {
-    var loading by mutableStateOf(false); private set
-    var error by mutableStateOf<String?>(null); private set
-    var items by mutableStateOf<List<MenuItem>>(emptyList()); private set
-    val qty = mutableStateMapOf<String, Int>()
+    private val _state = MutableStateFlow(BranchMenuUiState())
+    val state = _state.asStateFlow()
 
     fun start(branchId: String) {
-        if (loading) return
-        loading = true
+        if (!_state.value.loading) return
         viewModelScope.launch {
             try {
-                repo.listenMenu(branchId).collectLatest { list ->
-                    items = list.filter { it.isAvailable } // Java boolean getter -> Kotlin property
-                    items.forEach { if (qty[it.id] == null) qty[it.id] = 0 }
-                    loading = false
+                repo.listenMenu(branchId).collect { list ->
+                    _state.value = BranchMenuUiState(loading = false, items = list)
                 }
             } catch (e: Exception) {
-                error = e.message
-                loading = false
+                _state.value = BranchMenuUiState(loading = false, error = e.message ?: "Error")
             }
         }
     }
 
-    fun inc(id: String) { qty[id] = (qty[id] ?: 0) + 1 }
-    fun dec(id: String) { qty[id] = max(0, (qty[id] ?: 0) - 1) }
+    /** Adds with computed price; size/extras appended to name (no schema changes needed). */
+    fun addToCart(
+        branchId: String,
+        item: MenuItem,
+        size: String,
+        extras: List<String>,
+        qty: Int
+    ) = viewModelScope.launch {
+        val base = item.price
+        val sizeMultiplier = when (size) {
+            "S" -> 1.0
+            "M" -> 1.3
+            "L" -> 1.6
+            else -> 1.3
+        }
+        val extrasCost = 80.0 * extras.size
+        val unitPrice = (base * sizeMultiplier) + extrasCost
 
-    fun addToCart(branchId: String, item: MenuItem, count: Int) = viewModelScope.launch {
-        if (count <= 0) return@launch
+        val name = buildString {
+            append(item.title ?: "Untitled")
+            append(" (").append(size).append(")")
+            if (extras.isNotEmpty()) {
+                append(" + ").append(extras.joinToString(", "))
+            }
+        }
+
+        val extrasCsv = extras.joinToString(", ")
+
+        // **FIX:** Renamed parameter 'price' to 'computedUnitPrice' to match the function definition
         cart.addOrIncrement(
             branchId = branchId,
             itemId = item.id,
-            name = item.title,
-            price = item.price,
+            name = name,
+            computedUnitPrice = unitPrice,
             imageUrl = item.imageUrl,
-            qty = count
+            qty = qty,
+            size = size,
+            extrasCsv = extrasCsv
         )
-        qty[item.id] = 0
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+// ---------- Screen ----------
 @Composable
 fun BranchMenuScreen(
     navController: NavController,
@@ -73,31 +116,43 @@ fun BranchMenuScreen(
     vm: BranchMenuViewModel = hiltViewModel()
 ) {
     LaunchedEffect(branchId) { vm.start(branchId) }
+    val state by vm.state.collectAsState()
 
-    Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text("Menu • $branchId") }) },
-        bottomBar = {
-            Button(
-                onClick = { navController.navigate("cart/$branchId") },
-                modifier = Modifier.fillMaxWidth().padding(16.dp)
-            ) { Text("Go to cart") }
+    androidx.compose.material3.Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Menu • $branchId") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
         }
     ) { inner ->
         when {
-            vm.loading -> Box(Modifier.fillMaxSize().padding(inner), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-            vm.error != null -> Text("Error: ${vm.error}", modifier = Modifier.padding(inner).padding(16.dp))
-            else -> LazyColumn(Modifier.fillMaxSize().padding(inner)) {
-                items(vm.items) { mi ->
-                    MenuRow(
+            state.loading -> Box(
+                Modifier.fillMaxSize().padding(inner),
+                contentAlignment = Alignment.Center
+            ) { CircularProgressIndicator() }
+
+            state.error != null -> Text(
+                "Error: ${state.error}",
+                modifier = Modifier.padding(inner).padding(16.dp)
+            )
+
+            else -> LazyColumn(
+                Modifier.fillMaxSize().padding(inner),
+                contentPadding = PaddingValues(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(state.items) { mi ->
+                    MenuCard(
                         item = mi,
-                        qty = vm.qty[mi.id] ?: 0,
-                        onMinus = { vm.dec(mi.id) },
-                        onPlus = { vm.inc(mi.id) },
-                        onAdd = { vm.addToCart(branchId, mi, vm.qty[mi.id] ?: 0) }
+                        onAdd = { size, extras, qty ->
+                            vm.addToCart(branchId, mi, size, extras, qty)
+                        }
                     )
-                    Divider()
                 }
             }
         }
@@ -105,27 +160,69 @@ fun BranchMenuScreen(
 }
 
 @Composable
-private fun MenuRow(
+private fun MenuCard(
     item: MenuItem,
-    qty: Int,
-    onMinus: () -> Unit,
-    onPlus: () -> Unit,
-    onAdd: () -> Unit
+    onAdd: (size: String, extras: List<String>, qty: Int) -> Unit
 ) {
-    Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), tonalElevation = 2.dp) {
-        Column(Modifier.padding(12.dp)) {
-            Text(item.title, style = MaterialTheme.typography.titleMedium)
-            item.description?.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = MaterialTheme.typography.bodyMedium)
+    val title = item.title ?: "Untitled"
+    val desc = item.description ?: ""
+    val basePrice = item.price
+
+    var size by remember { mutableStateOf("M") }
+    val allExtras = listOf("Extra Cheese", "Olives", "Mushrooms", "Pepperoni")
+    var extras by remember { mutableStateOf(setOf<String>()) }
+    var qty by remember { mutableStateOf(1) }
+
+    val sizeMultiplier = when (size) { "S" -> 1.0; "M" -> 1.3; "L" -> 1.6; else -> 1.3 }
+    val unitPreview = (basePrice * sizeMultiplier) + (80.0 * extras.size)
+
+    ElevatedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            if (desc.isNotBlank()) Text(desc)
+            Text("Base: Rs. ${"%.2f".format(basePrice)}")
+
+            // Size selector
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("S","M","L").forEach { s ->
+                    FilterChip(
+                        selected = size == s,
+                        onClick = { size = s },
+                        label = { Text("Size $s") }
+                    )
+                }
             }
-            Text("Rs. ${"%.2f".format(item.price)}", style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = onMinus, enabled = qty > 0) { Text("-") }
-                Text("$qty", style = MaterialTheme.typography.titleMedium)
-                OutlinedButton(onClick = onPlus) { Text("+") }
+
+            // Extras chips
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                allExtras.forEach { e ->
+                    FilterChip(
+                        selected = extras.contains(e),
+                        onClick = {
+                            extras = if (extras.contains(e)) extras - e else extras + e
+                        },
+                        label = { Text(e) }
+                    )
+                }
+            }
+
+            // Qty stepper + cost preview
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                androidx.compose.material3.OutlinedButton(onClick = { if (qty > 1) qty-- }) { Text("-") }
+                Text("$qty")
+                androidx.compose.material3.OutlinedButton(onClick = { qty++ }) { Text("+") }
                 Spacer(Modifier.weight(1f))
-                Button(onClick = onAdd, enabled = qty > 0) { Text("Add") }
+                Text("Unit: Rs. ${"%.2f".format(unitPreview)}")
+            }
+
+            Button(onClick = { onAdd(size, extras.toList(), qty) }, modifier = Modifier.fillMaxWidth()) {
+                Text("Add to cart (Rs. ${"%.2f".format(unitPreview * qty)})")
             }
         }
     }

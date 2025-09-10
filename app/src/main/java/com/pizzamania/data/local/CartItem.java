@@ -13,21 +13,37 @@ public class CartItem {
     public String itemId;
     public String branchId;
 
-    // Keep names aligned with Kotlin usage
+    // Display
     public String name;
+    /** unit price after size/extras have been applied */
     public double price;
     public int qty;
 
-    @Nullable
-    public String imageUrl;
+    @Nullable public String imageUrl;
 
-    public CartItem(String itemId, String branchId, String name,
-                    double price, int qty, @Nullable String imageUrl) {
+    // NEW: options (kept simple for Room/migrations)
+    /** "S","M","L" */
+    public String size;             // never null (default "M")
+    /** comma-separated list: "Extra Cheese,Olives" */
+    @Nullable public String extrasCsv;
+
+    public CartItem(
+            String itemId,
+            String branchId,
+            String name,
+            double price,
+            int qty,
+            @Nullable String imageUrl,
+            String size,
+            @Nullable String extrasCsv
+    ) {
         this.itemId = itemId;
         this.branchId = branchId;
         this.name = name;
         this.price = price;
         this.qty = qty;
         this.imageUrl = imageUrl;
+        this.size = (size == null || size.isEmpty()) ? "M" : size;
+        this.extrasCsv = (extrasCsv != null && extrasCsv.trim().isEmpty()) ? null : extrasCsv;
     }
 }
