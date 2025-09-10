@@ -1,32 +1,30 @@
 package com.pizzamania.data.model;
 
 import androidx.annotation.Keep;
+import androidx.annotation.Nullable;
+import com.google.firebase.firestore.GeoPoint;
 
-@Keep // helps Firestore/obfuscation
+@Keep
 public class Branch {
     private String id;
     private String name;
     private String address;
     private String phone;
     private boolean active;
-    private double latitude;
-    private double longitude;
+    @Nullable private GeoPoint location; // lat/lng for nearest-branch logic
 
-    // Firestore needs a no-arg constructor
     public Branch() {}
 
     public Branch(String id, String name, String address, String phone,
-                  boolean active, double latitude, double longitude) {
+                  boolean active, @Nullable GeoPoint location) {
         this.id = id;
         this.name = name;
         this.address = address;
         this.phone = phone;
         this.active = active;
-        this.latitude = latitude;
-        this.longitude = longitude;
+        this.location = location;
     }
 
-    // ----- getters / setters -----
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
 
@@ -42,9 +40,6 @@ public class Branch {
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
 
-    public double getLatitude() { return latitude; }
-    public void setLatitude(double latitude) { this.latitude = latitude; }
-
-    public double getLongitude() { return longitude; }
-    public void setLongitude(double longitude) { this.longitude = longitude; }
+    @Nullable public GeoPoint getLocation() { return location; }
+    public void setLocation(@Nullable GeoPoint location) { this.location = location; }
 }

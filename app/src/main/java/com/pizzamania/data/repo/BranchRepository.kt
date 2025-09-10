@@ -1,6 +1,7 @@
 package com.pizzamania.data.repo
 
 import com.google.firebase.firestore.FirebaseFirestore
+import com.pizzamania.data.model.Branch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton

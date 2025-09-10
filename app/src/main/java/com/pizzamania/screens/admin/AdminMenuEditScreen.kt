@@ -7,15 +7,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NavController
-import com.pizzamania.data.repo.MenuRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.navigation.NavController
+import com.pizzamania.data.model.MenuItem
+import com.pizzamania.data.repo.MenuRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -24,7 +25,6 @@ class AdminMenuEditViewModel @Inject constructor(
     private val repo: MenuRepository
 ) : ViewModel() {
 
-    // existing item (when editing)
     var existing by mutableStateOf<MenuItem?>(null); private set
     var loading by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null); private set
@@ -61,20 +61,18 @@ fun AdminMenuEditScreen(
         if (itemId != null) vm.load(branchId, itemId)
     }
 
-    // UI state
     var title by remember { mutableStateOf("") }
     var desc by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
     var available by remember { mutableStateOf(true) }
-    var imageUrl by remember { mutableStateOf("") } // NEW: paste URL
+    var imageUrl by remember { mutableStateOf("") }
 
-    // prefill when editing
     LaunchedEffect(vm.existing) {
         vm.existing?.let {
             title = it.title
             desc = it.description ?: ""
             price = if (it.price == 0.0) "" else it.price.toString()
-            available = it.available
+            available = it.isAvailable
             imageUrl = it.imageUrl ?: ""
         }
     }
@@ -107,8 +105,11 @@ fun AdminMenuEditScreen(
             )
 
             OutlinedTextField(
-                value = price, onValueChange = { price = it.filter { c -> c.isDigit() || c == '.' } },
-                label = { Text("Price") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                value = price,
+                onValueChange = { price = it.filter { c -> c.isDigit() || c == '.' } },
+                label = { Text("Price") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
             )
 
@@ -118,7 +119,6 @@ fun AdminMenuEditScreen(
                 Switch(checked = available, onCheckedChange = { available = it })
             }
 
-            // NEW: URL field — no Cloud Storage needed
             OutlinedTextField(
                 value = imageUrl, onValueChange = { imageUrl = it.trim() },
                 label = { Text("Image URL (paste)") },
@@ -143,25 +143,25 @@ fun AdminMenuEditScreen(
                             toast("Invalid price"); return@Button
                         }
 
-                        val toSave = MenuItem(
-                            id = itemId ?: "", // repo will set when creating
-                            title = title.trim(),
-                            description = desc.trim().ifBlank { null },
-                            price = priceD,
-                            available = available,
-                            imageUrl = imageUrl.ifBlank { null } // <- use pasted URL
+                        val built = MenuItem(
+                            itemId ?: "",
+                            title.trim(),
+                            desc.trim().ifBlank { null },
+                            priceD,
+                            available,
+                            imageUrl.ifBlank { null }
                         )
 
-                        val job = if (itemId == null) {
+                        if (itemId == null) {
                             vm.viewModelScope.launch {
-                                try {
-                                    vm.saveNew(branchId, toSave); toast("Saved"); nav.popBackStack()
-                                } catch (e: Exception) { toast(e.message ?: "Save failed") }
+                                try { vm.saveNew(branchId, built); toast("Saved"); nav.popBackStack() }
+                                catch (e: Exception) { toast(e.message ?: "Save failed") }
                             }
                         } else {
                             vm.viewModelScope.launch {
                                 try {
-                                    vm.saveEdit(branchId, toSave); toast("Updated"); nav.popBackStack()
+                                    built.id = itemId
+                                    vm.saveEdit(branchId, built); toast("Updated"); nav.popBackStack()
                                 } catch (e: Exception) { toast(e.message ?: "Update failed") }
                             }
                         }

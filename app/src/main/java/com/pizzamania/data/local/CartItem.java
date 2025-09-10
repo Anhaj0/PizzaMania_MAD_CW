@@ -12,20 +12,22 @@ public class CartItem {
 
     public String itemId;
     public String branchId;
-    public String title;
+
+    // Keep names aligned with Kotlin usage
+    public String name;
     public double price;
     public int qty;
 
     @Nullable
-    public String photoUrl;
+    public String imageUrl;
 
-    public CartItem(String itemId, String branchId, String title,
-                    double price, int qty, @Nullable String photoUrl) {
+    public CartItem(String itemId, String branchId, String name,
+                    double price, int qty, @Nullable String imageUrl) {
         this.itemId = itemId;
         this.branchId = branchId;
-        this.title = title;
+        this.name = name;
         this.price = price;
         this.qty = qty;
-        this.photoUrl = photoUrl;
+        this.imageUrl = imageUrl;
     }
 }

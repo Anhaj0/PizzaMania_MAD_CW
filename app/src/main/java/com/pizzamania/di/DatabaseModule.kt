@@ -2,6 +2,8 @@ package com.pizzamania.di
 
 import android.content.Context
 import androidx.room.Room
+import com.pizzamania.data.local.AppDatabase
+import com.pizzamania.data.local.CartDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn

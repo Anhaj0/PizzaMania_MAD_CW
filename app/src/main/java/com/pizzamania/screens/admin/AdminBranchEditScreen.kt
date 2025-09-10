@@ -5,19 +5,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NavController
-import com.google.firebase.firestore.GeoPoint
-import com.pizzamania.data.repo.BranchRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.navigation.NavController
+import com.google.firebase.firestore.GeoPoint
+import com.pizzamania.data.model.Branch
+import com.pizzamania.data.repo.BranchRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import androidx.compose.ui.Alignment
-
 
 @HiltViewModel
 class AdminBranchEditViewModel @Inject constructor(
@@ -55,7 +55,7 @@ class AdminBranchEditViewModel @Inject constructor(
                     name = b.name
                     address = b.address
                     phone = b.phone
-                    active = b.active
+                    active = b.isActive
                     lat = b.location?.latitude?.toString() ?: ""
                     lon = b.location?.longitude?.toString() ?: ""
                 } else {
@@ -80,12 +80,12 @@ class AdminBranchEditViewModel @Inject constructor(
                 val loc: GeoPoint? = if (latD != null && lonD != null) GeoPoint(latD, lonD) else null
 
                 val branch = Branch(
-                    id = id.trim(),
-                    name = name.trim(),
-                    address = address.trim(),
-                    phone = phone.trim(),
-                    active = active,
-                    location = loc
+                    id.trim(),
+                    name.trim(),
+                    address.trim(),
+                    phone.trim(),
+                    active,
+                    loc
                 )
                 if (isEdit) repo.updateBranch(id, branch) else repo.createBranch(id, branch)
                 saved = true
@@ -122,7 +122,6 @@ fun AdminBranchEditScreen(
     }
 
     if (vm.saved) {
-        // go back after save/delete
         LaunchedEffect(Unit) { navController.popBackStack() }
     }
 
@@ -198,7 +197,6 @@ fun AdminBranchEditScreen(
                 label = { Text("Longitude") }, singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-
             if (vm.error != null) {
                 Text(vm.error!!, color = MaterialTheme.colorScheme.error)
             }

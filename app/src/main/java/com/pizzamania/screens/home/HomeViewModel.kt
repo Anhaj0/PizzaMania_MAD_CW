@@ -10,6 +10,7 @@ import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.firebase.firestore.GeoPoint
+import com.pizzamania.data.model.Branch
 import com.pizzamania.data.repo.BranchRepository
 import com.pizzamania.util.distanceKm
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -60,19 +61,13 @@ class HomeViewModel @Inject constructor(
 
         _state.value = _state.value.copy(loading = true, error = null)
 
-        // 1) Try a fresh reading
         val token = CancellationTokenSource()
         fused.getCurrentLocation(
             if (fine == PackageManager.PERMISSION_GRANTED) Priority.PRIORITY_HIGH_ACCURACY
             else Priority.PRIORITY_BALANCED_POWER_ACCURACY,
             token.token
         ).addOnSuccessListener { loc ->
-            if (loc != null) {
-                handleLocation(loc.latitude, loc.longitude)
-            } else {
-                // 2) Fallback to last known
-                fallbackToLastLocation()
-            }
+            if (loc != null) handleLocation(loc.latitude, loc.longitude) else fallbackToLastLocation()
         }.addOnFailureListener {
             fallbackToLastLocation()
         }
@@ -81,14 +76,11 @@ class HomeViewModel @Inject constructor(
     private fun fallbackToLastLocation() {
         fused.lastLocation
             .addOnSuccessListener { loc ->
-                if (loc != null) {
-                    handleLocation(loc.latitude, loc.longitude)
-                } else {
-                    _state.value = _state.value.copy(
-                        loading = false,
-                        error = "Couldn't get location. Make sure location is ON and try again."
-                    )
-                }
+                if (loc != null) handleLocation(loc.latitude, loc.longitude)
+                else _state.value = _state.value.copy(
+                    loading = false,
+                    error = "Couldn't get location. Make sure location is ON and try again."
+                )
             }
             .addOnFailureListener { e ->
                 _state.value = _state.value.copy(loading = false, error = e.message ?: "Location error")

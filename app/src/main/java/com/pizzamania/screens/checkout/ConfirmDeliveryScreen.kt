@@ -2,23 +2,22 @@ package com.pizzamania.screens.checkout
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.text.KeyboardOptions   // <-- correct one
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
+import com.pizzamania.data.local.CartItem
 import com.pizzamania.data.repo.CartRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import androidx.compose.ui.text.input.KeyboardType       // <-- keep this
-
 
 @HiltViewModel
 class ConfirmViewModel @Inject constructor(
@@ -29,18 +28,27 @@ class ConfirmViewModel @Inject constructor(
     suspend fun submit(branchId: String, name: String, address: String, phone: String) {
         val items: List<CartItem> = cart.observeCart(branchId).first()
         val subtotal = items.sumOf { it.price * it.qty }
+        val now = System.currentTimeMillis()
+
         val order = hashMapOf(
             "branchId" to branchId,
             "items" to items.map {
-                mapOf("itemId" to it.itemId, "name" to it.name, "price" to it.price, "qty" to it.qty)
+                mapOf(
+                    "itemId" to it.itemId,
+                    "title"  to it.name,
+                    "price"  to it.price,
+                    "qty"    to it.qty
+                )
             },
-            "subtotal" to subtotal,
-            "deliveryFee" to 0L,
-            "total" to subtotal,
-            "delivery" to mapOf("name" to name, "address" to address, "phone" to phone),
-            "status" to "placed",
-            "placedAt" to Timestamp.now()
+            "subtotal"    to subtotal,
+            "deliveryFee" to 0.0,
+            "total"       to subtotal,
+            "delivery"    to mapOf("name" to name, "address" to address, "phone" to phone),
+            "status"      to "PLACED",
+            "placedAt"    to now,
+            "updatedAt"   to now
         )
+
         db.collection("orders").add(order)
         cart.clearBranch(branchId)
     }
@@ -86,7 +94,7 @@ fun ConfirmDeliveryScreen(
                 .padding(inner)
                 .padding(16.dp)
                 .verticalScroll(scroll)
-                .imePadding(),                      // moves content above keyboard
+                .imePadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedTextField(
@@ -105,13 +113,13 @@ fun ConfirmDeliveryScreen(
             )
             OutlinedTextField(
                 value = phone,
-                onValueChange = { phone = it },
+                onValueChange = { phone = it.filter { ch -> ch.isDigit() || ch == '+' || ch == ' ' } },
                 label = { Text("Phone") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(Modifier.height(80.dp)) // keep content clear of the bottom button
+            Spacer(Modifier.height(80.dp))
         }
     }
 }

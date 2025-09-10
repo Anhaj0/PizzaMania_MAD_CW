@@ -8,13 +8,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NavController
-import coil.compose.AsyncImage
-import com.pizzamania.data.repo.MenuRepository
-import com.pizzamania.navigation.Routes
-import dagger.hilt.android.lifecycle.HiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.navigation.NavController
+import coil.compose.AsyncImage
+import com.pizzamania.data.model.MenuItem
+import com.pizzamania.data.repo.MenuRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -82,7 +82,7 @@ fun AdminMenusScreen(
                             Column(Modifier.weight(1f)) {
                                 Text(m.title, style = MaterialTheme.typography.titleMedium)
                                 Text("Rs. ${m.price}", style = MaterialTheme.typography.bodyMedium)
-                                if (!m.available) Text("Unavailable", color = MaterialTheme.colorScheme.error)
+                                if (!m.isAvailable) Text("Unavailable", color = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
