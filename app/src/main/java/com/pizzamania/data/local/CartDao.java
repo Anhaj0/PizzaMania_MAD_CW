@@ -9,6 +9,7 @@ import androidx.room.Update;
 
 import java.util.List;
 
+import androidx.annotation.Nullable;
 import kotlinx.coroutines.flow.Flow;
 
 @Dao
@@ -17,11 +18,14 @@ public interface CartDao {
     @Query("SELECT * FROM cart_items WHERE branchId = :branchId ORDER BY localId DESC")
     Flow<List<CartItem>> observeCart(String branchId);
 
-    // the *exact* same item+options to merge quantities
+    // Same item + same options → merge qty
     @Query("SELECT * FROM cart_items " +
-            "WHERE branchId = :branchId AND itemId = :itemId AND size = :size AND IFNULL(extrasCsv,'') = IFNULL(:extrasCsv,'') " +
+            "WHERE branchId = :branchId " +
+            "AND itemId = :itemId " +
+            "AND size = :size " +
+            "AND COALESCE(extrasCsv,'') = COALESCE(:extrasCsv,'') " +
             "LIMIT 1")
-    CartItem getItemWithOptions(String branchId, String itemId, String size, String extrasCsv);
+    CartItem getItemWithOptions(String branchId, String itemId, String size, @Nullable String extrasCsv);
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void insert(CartItem item);

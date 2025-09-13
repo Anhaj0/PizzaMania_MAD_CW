@@ -1,5 +1,6 @@
 package com.pizzamania.screens.admin
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -82,7 +83,11 @@ fun AdminMenusScreen(
             LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(vm.items) { m ->
                     val title = m.title ?: "Untitled"
-                    Card(onClick = { nav.navigate("admin/branch/$branchId/menu/${m.id}") }) {
+                    ElevatedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { nav.navigate("admin/branch/$branchId/menu/${m.id}") }
+                    ) {
                         Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             AsyncImage(
                                 model = m.imageUrl,

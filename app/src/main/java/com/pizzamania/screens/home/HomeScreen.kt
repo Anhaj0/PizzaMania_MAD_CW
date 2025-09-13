@@ -14,6 +14,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
 import com.pizzamania.navigation.Routes
 
 @Composable
@@ -21,7 +24,18 @@ fun HomeScreen(navController: NavController, vm: HomeViewModel = hiltViewModel()
     val state by vm.state.collectAsState()
     val context = LocalContext.current
 
-    // Auto-fetch if permission was already granted (e.g., after app restart)
+    var hello by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        try {
+            val uid = FirebaseAuth.getInstance().currentUser?.uid
+            if (uid != null) {
+                val doc = FirebaseFirestore.getInstance()
+                    .collection("users").document(uid).get().await()
+                doc.getString("name")?.let { if (it.isNotBlank()) hello = "Hello, $it" }
+            }
+        } catch (_: Exception) {}
+    }
+
     LaunchedEffect(Unit) {
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -41,12 +55,15 @@ fun HomeScreen(navController: NavController, vm: HomeViewModel = hiltViewModel()
     val nearest = state.nearest
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
+        modifier = Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        hello?.let {
+            Text(it, style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
+        }
+
         when {
             state.loading -> CircularProgressIndicator()
 
@@ -69,12 +86,10 @@ fun HomeScreen(navController: NavController, vm: HomeViewModel = hiltViewModel()
                 Text(state.error ?: "Tap to find nearest branch")
                 Spacer(Modifier.height(8.dp))
                 Button(onClick = {
-                    permissionLauncher.launch(
-                        arrayOf(
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
-                        )
-                    )
+                    permissionLauncher.launch(arrayOf(
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    ))
                 }) { Text("Use my location") }
 
                 if (state.error != null) {
@@ -84,9 +99,8 @@ fun HomeScreen(navController: NavController, vm: HomeViewModel = hiltViewModel()
             }
         }
 
-        // Admin login access
         Spacer(Modifier.height(24.dp))
-        OutlinedButton(onClick = { navController.navigate(Routes.SignIn) }) {
+        OutlinedButton(onClick = { navController.navigate(Routes.Auth) }) {
             Text("Admin login")
         }
     }

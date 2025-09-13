@@ -2,6 +2,7 @@ package com.pizzamania.data.local;
 
 import androidx.annotation.Nullable;
 import androidx.room.Entity;
+import androidx.room.Ignore;
 import androidx.room.PrimaryKey;
 
 @Entity(tableName = "cart_items")
@@ -21,12 +22,20 @@ public class CartItem {
 
     @Nullable public String imageUrl;
 
-    // NEW: options (kept simple for Room/migrations)
-    /** "S","M","L" */
-    public String size;             // never null (default "M")
-    /** comma-separated list: "Extra Cheese,Olives" */
+    // Options
+    /** "S","M","L" — never null (default "M") */
+    public String size;
+
+    /** comma-separated list: "Extra Cheese,Olives" (nullable = no extras) */
     @Nullable public String extrasCsv;
 
+    /** REQUIRED by Room — keep fields public so Room can set them directly */
+    public CartItem() {
+        this.size = "M";
+    }
+
+    /** Convenience constructor for your own inserts/updates */
+    @Ignore
     public CartItem(
             String itemId,
             String branchId,

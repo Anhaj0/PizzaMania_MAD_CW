@@ -11,15 +11,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.ShoppingCart
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,15 +30,15 @@ import javax.inject.Inject
 import com.pizzamania.data.model.MenuItem
 import com.pizzamania.data.repo.MenuRepository
 import com.pizzamania.data.repo.CartRepository
+import com.google.firebase.auth.FirebaseAuth
+import com.pizzamania.navigation.Routes
 
-// ---------- UI state ----------
 data class BranchMenuUiState(
     val loading: Boolean = true,
     val error: String? = null,
     val items: List<MenuItem> = emptyList()
 )
 
-// ---------- VM ----------
 @HiltViewModel
 class BranchMenuViewModel @Inject constructor(
     private val repo: MenuRepository,
@@ -66,7 +60,6 @@ class BranchMenuViewModel @Inject constructor(
         }
     }
 
-    /** Adds with computed price; size/extras appended to name (no schema changes needed). */
     fun addToCart(
         branchId: String,
         item: MenuItem,
@@ -75,26 +68,17 @@ class BranchMenuViewModel @Inject constructor(
         qty: Int
     ) = viewModelScope.launch {
         val base = item.price
-        val sizeMultiplier = when (size) {
-            "S" -> 1.0
-            "M" -> 1.3
-            "L" -> 1.6
-            else -> 1.3
-        }
+        val sizeMultiplier = when (size) { "S" -> 1.0; "M" -> 1.3; "L" -> 1.6; else -> 1.3 }
         val extrasCost = 80.0 * extras.size
         val unitPrice = (base * sizeMultiplier) + extrasCost
 
         val name = buildString {
             append(item.title ?: "Untitled")
             append(" (").append(size).append(")")
-            if (extras.isNotEmpty()) {
-                append(" + ").append(extras.joinToString(", "))
-            }
+            if (extras.isNotEmpty()) append(" + ").append(extras.joinToString(", "))
         }
-
         val extrasCsv = extras.joinToString(", ")
 
-        // **FIX:** Renamed parameter 'price' to 'computedUnitPrice' to match the function definition
         cart.addOrIncrement(
             branchId = branchId,
             itemId = item.id,
@@ -108,7 +92,6 @@ class BranchMenuViewModel @Inject constructor(
     }
 }
 
-// ---------- Screen ----------
 @Composable
 fun BranchMenuScreen(
     navController: NavController,
@@ -117,8 +100,10 @@ fun BranchMenuScreen(
 ) {
     LaunchedEffect(branchId) { vm.start(branchId) }
     val state by vm.state.collectAsState()
+    val auth = remember { FirebaseAuth.getInstance() }
+    var menuOpen by remember { mutableStateOf(false) }
 
-    androidx.compose.material3.Scaffold(
+    Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Menu • $branchId") },
@@ -126,8 +111,56 @@ fun BranchMenuScreen(
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
+                },
+                actions = {
+                    Box {
+                        IconButton(onClick = { menuOpen = true }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "Menu")
+                        }
+                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Profile") },
+                                onClick = {
+                                    menuOpen = false
+                                    if (auth.currentUser == null) {
+                                        navController.navigate(Routes.Auth)
+                                    } else {
+                                        navController.navigate(Routes.Profile)
+                                    }
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("My orders") },
+                                onClick = {
+                                    menuOpen = false
+                                    if (auth.currentUser == null) {
+                                        navController.navigate(Routes.Auth)
+                                    } else {
+                                        navController.navigate(Routes.MyOrders)
+                                    }
+                                }
+                            )
+                            if (auth.currentUser != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Sign out") },
+                                    onClick = {
+                                        menuOpen = false
+                                        auth.signOut()
+                                        navController.navigate(Routes.Auth) {
+                                            popUpTo(Routes.Splash) { inclusive = true }
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { navController.navigate("cart/$branchId") }) {
+                Icon(Icons.Outlined.ShoppingCart, contentDescription = "Cart")
+            }
         }
     ) { inner ->
         when {
@@ -142,16 +175,14 @@ fun BranchMenuScreen(
             )
 
             else -> LazyColumn(
-                Modifier.fillMaxSize().padding(inner),
+                modifier = Modifier.fillMaxSize().padding(inner),
                 contentPadding = PaddingValues(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(state.items) { mi ->
                     MenuCard(
                         item = mi,
-                        onAdd = { size, extras, qty ->
-                            vm.addToCart(branchId, mi, size, extras, qty)
-                        }
+                        onAdd = { size, extras, qty -> vm.addToCart(branchId, mi, size, extras, qty) }
                     )
                 }
             }
@@ -182,18 +213,12 @@ private fun MenuCard(
             if (desc.isNotBlank()) Text(desc)
             Text("Base: Rs. ${"%.2f".format(basePrice)}")
 
-            // Size selector
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("S","M","L").forEach { s ->
-                    FilterChip(
-                        selected = size == s,
-                        onClick = { size = s },
-                        label = { Text("Size $s") }
-                    )
+                    FilterChip(selected = size == s, onClick = { size = s }, label = { Text("Size $s") })
                 }
             }
 
-            // Extras chips
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -201,27 +226,27 @@ private fun MenuCard(
                 allExtras.forEach { e ->
                     FilterChip(
                         selected = extras.contains(e),
-                        onClick = {
-                            extras = if (extras.contains(e)) extras - e else extras + e
-                        },
+                        onClick = { extras = if (extras.contains(e)) extras - e else extras + e },
                         label = { Text(e) }
                     )
                 }
             }
 
-            // Qty stepper + cost preview
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                androidx.compose.material3.OutlinedButton(onClick = { if (qty > 1) qty-- }) { Text("-") }
+                OutlinedButton(onClick = { if (qty > 1) qty-- }) { Text("-") }
                 Text("$qty")
-                androidx.compose.material3.OutlinedButton(onClick = { qty++ }) { Text("+") }
+                OutlinedButton(onClick = { qty++ }) { Text("+") }
                 Spacer(Modifier.weight(1f))
                 Text("Unit: Rs. ${"%.2f".format(unitPreview)}")
             }
 
-            Button(onClick = { onAdd(size, extras.toList(), qty) }, modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = { onAdd(size, extras.toList(), qty) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text("Add to cart (Rs. ${"%.2f".format(unitPreview * qty)})")
             }
         }

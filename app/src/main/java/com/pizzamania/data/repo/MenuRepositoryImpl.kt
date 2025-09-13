@@ -24,15 +24,18 @@ class MenuRepositoryImpl @Inject constructor(
         val item = doc.toObject(MenuItem::class.java) ?: MenuItem()
 
         // Ensure id
-        if (item.id.isNullOrBlank()) item.id = doc.id
+        val id = item.id?.trim().orEmpty()
+        if (id.isEmpty()) item.id = doc.id
 
         // Ensure title (fallback from legacy "name")
-        if (item.title.isNullOrBlank()) {
-            val fromDoc = doc.getString("title") ?: doc.getString("name")
-            item.title = if (!fromDoc.isNullOrBlank()) fromDoc else "Untitled"
+        val title = item.title?.trim().orEmpty()
+        if (title.isEmpty()) {
+            val fromDoc = (doc.getString("title") ?: doc.getString("name"))?.trim()
+            item.title = if (fromDoc.isNullOrBlank()) "Untitled" else fromDoc
         }
+
         // Ensure price is not NaN (rare malformed docs)
-        if (item.price.isNaN()) item.price = 0.0
+        if (java.lang.Double.isNaN(item.price)) item.price = 0.0
 
         return item
     }
@@ -49,10 +52,11 @@ class MenuRepositoryImpl @Inject constructor(
         col(branchId).document(itemId).get().await().let { if (it.exists()) patched(it) else null }
 
     override suspend fun addMenuItem(branchId: String, item: MenuItem) {
-        val ref = if (item.id.isNullOrBlank()) col(branchId).document() else col(branchId).document(item.id!!)
+        val newId = item.id?.trim().orEmpty().ifBlank { col(branchId).document().id }
+        val ref = col(branchId).document(newId)
         val toSave = MenuItem(
-            ref.id,
-            item.title ?: "Untitled",
+            newId,
+            (item.title ?: "").ifBlank { "Untitled" },
             item.description,
             item.price,
             item.isAvailable,
@@ -62,16 +66,17 @@ class MenuRepositoryImpl @Inject constructor(
     }
 
     override suspend fun updateMenuItem(branchId: String, item: MenuItem) {
-        require(!item.id.isNullOrBlank()) { "item.id missing" }
+        val id = item.id?.trim().orEmpty()
+        require(id.isNotBlank()) { "item.id missing" }
         val toSave = MenuItem(
-            item.id!!,
-            item.title ?: "Untitled",
+            id,
+            (item.title ?: "").ifBlank { "Untitled" },
             item.description,
             item.price,
             item.isAvailable,
             item.imageUrl
         )
-        col(branchId).document(item.id!!).set(toSave).await()
+        col(branchId).document(id).set(toSave).await()
     }
 
     override suspend fun deleteMenuItem(branchId: String, itemId: String) {

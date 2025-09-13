@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase;
 
 @Database(
         entities = { CartItem.class },
-        version = 2,          // ⬅️ bump
+        version = 2,
         exportSchema = false
 )
 public abstract class AppDatabase extends RoomDatabase {

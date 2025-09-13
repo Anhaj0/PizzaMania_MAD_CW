@@ -65,6 +65,7 @@ fun AdminMenuEditScreen(
     var price by remember { mutableStateOf("") }
     var available by remember { mutableStateOf(true) }
     var imageUrl by remember { mutableStateOf("") }
+    var priceError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(vm.existing) {
         vm.existing?.let {
@@ -77,6 +78,28 @@ fun AdminMenuEditScreen(
     }
 
     fun toast(s: String) = Toast.makeText(ctx, s, Toast.LENGTH_SHORT).show()
+
+    fun sanitizePrice(input: String): String {
+        // allow digits and a single dot; trim leading dot to "0."
+        val filtered = input.filter { it.isDigit() || it == '.' }
+        var dotSeen = false
+        val sb = StringBuilder()
+        for (ch in filtered) {
+            if (ch == '.') {
+                if (dotSeen) continue
+                dotSeen = true
+            }
+            sb.append(ch)
+        }
+        val s = sb.toString()
+        return if (s == ".") "0." else s
+    }
+
+    fun validatePrice(s: String): Double? {
+        val d = s.toDoubleOrNull() ?: return null
+        if (d < 0.0) return null
+        return d
+    }
 
     Scaffold(
         topBar = {
@@ -107,8 +130,13 @@ fun AdminMenuEditScreen(
             )
             OutlinedTextField(
                 value = price,
-                onValueChange = { price = it.filter { c -> c.isDigit() || c == '.' } },
+                onValueChange = {
+                    price = sanitizePrice(it)
+                    priceError = null
+                },
                 label = { Text("Price") },
+                isError = priceError != null,
+                supportingText = { if (priceError != null) Text(priceError!!) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
@@ -131,15 +159,12 @@ fun AdminMenuEditScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
                     onClick = {
-                        if (title.isBlank() || price.isBlank()) {
-                            toast("Title and price are required"); return@Button
-                        }
-                        val priceD = price.toDoubleOrNull() ?: run {
-                            toast("Invalid price"); return@Button
+                        if (title.isBlank()) { toast("Title is required"); return@Button }
+                        val priceD = validatePrice(price) ?: run {
+                            priceError = "Enter a valid non-negative number"
+                            return@Button
                         }
 
-                        // NOTE: Java constructor => positional args only (no named args), and
-                        // description/imageUrl are @Nullable so we can pass null safely.
                         val built = MenuItem(
                             itemId ?: "",
                             title.trim(),

@@ -15,7 +15,6 @@ import androidx.navigation.NavController
 import com.pizzamania.data.local.CartItem
 import com.pizzamania.data.repo.CartRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -33,7 +32,7 @@ class CartViewModel @Inject constructor(private val repo: CartRepository)
 fun CartScreen(navController: NavController, branchId: String, vm: CartViewModel = hiltViewModel()) {
     val scope = rememberCoroutineScope()
     val items by vm.cart(branchId).collectAsState(initial = emptyList())
-    val total by vm.cart(branchId).map { list -> list.sumOf { it.price * it.qty } }.collectAsState(initial = 0.0)
+    val total by remember(items) { mutableStateOf(items.sumOf { it.price * it.qty }) }
 
     Scaffold(
         topBar = {
@@ -58,9 +57,9 @@ fun CartScreen(navController: NavController, branchId: String, vm: CartViewModel
             if (items.isEmpty()) {
                 Text("Your cart is empty.")
             } else {
-                LazyColumn(Modifier.weight(1f)) {
+                LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(items) { it ->
-                        Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                        ElevatedCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(12.dp)) {
                                 Text(it.name, style = MaterialTheme.typography.titleMedium)
                                 if (it.extrasCsv != null) {
