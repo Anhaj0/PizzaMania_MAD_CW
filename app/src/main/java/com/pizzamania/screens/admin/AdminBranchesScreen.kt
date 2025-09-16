@@ -62,7 +62,6 @@ fun AdminBranchesScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Admin • Branches") },
-                // Fix: Added back button for better navigation.
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
@@ -109,11 +108,11 @@ fun AdminBranchesScreen(
                         supportingContent = { Text(b.address) },
                         trailingContent = {
                             TextButton(
-                                onClick = { navController.navigate("admin/branch/${b.id}") }
+                                onClick = { navController.navigate(Routes.AdminBranch(b.id)) }
                             ) { Text("Edit") }
                         },
                         modifier = Modifier.clickable {
-                            navController.navigate("admin/branch/${b.id}/menus")
+                            navController.navigate(Routes.AdminBranchMenus(b.id))
                         }
                     )
                     Divider()

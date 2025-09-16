@@ -7,12 +7,15 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.GeoPoint
 import com.pizzamania.data.model.User
 import com.pizzamania.data.repo.BranchRepository
 import com.pizzamania.util.distanceKm
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,8 +46,9 @@ class AuthViewModel @Inject constructor(
             }.onSuccess {
                 _state.value = AuthUiState()
                 onOk(it)
-            }.onFailure {
-                _state.value = AuthUiState(error = it.message)
+            }.onFailure { e ->
+                if (e is CancellationException) throw e
+                _state.value = AuthUiState(error = e.message ?: "Sign-in failed")
                 onOk(null)
             }
         }
@@ -63,16 +67,39 @@ class AuthViewModel @Inject constructor(
         }.onSuccess {
             _state.value = AuthUiState()
             onOk(it)
-        }.onFailure {
-            _state.value = AuthUiState(error = it.message)
+        }.onFailure { e ->
+            if (e is CancellationException) throw e
+            _state.value = AuthUiState(error = e.message ?: "Sign-up failed")
             onOk(null)
         }
     }
 
-    /** Returns nearest branchId or null (no branches / location). */
-    suspend fun nearestBranchId(): String? {
+    /**
+     * Returns the current user's role:
+     *  - "admin" if users/{uid}.role == "admin"
+     *  - "user" when present but not admin
+     *  - "guest" when no auth user
+     * Never throws.
+     */
+    suspend fun currentRole(): String = withContext(Dispatchers.IO) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@withContext "guest"
+        return@withContext try {
+            val snap = FirebaseFirestore.getInstance()
+                .collection("users").document(uid).get().await()
+            (snap.getString("role") ?: "user").lowercase()
+        } catch (_: Exception) {
+            "user"
+        }
+    }
+
+    /** Returns nearest branchId or null. Safe against missing permissions/GMS/locations. */
+    suspend fun nearestBranchId(): String? = withContext(Dispatchers.IO) {
         val list = try { branches.fetchBranches() } catch (_: Exception) { emptyList() }
-        if (list.isEmpty()) return null
+        if (list.isEmpty()) return@withContext null
+
+        // use first branch with location if we can't get a user location
+        val branchesWithLoc = list.filter { it.location != null }
+        if (branchesWithLoc.isEmpty()) return@withContext list.firstOrNull()?.id
 
         val here: GeoPoint? = try {
             val fine = ContextCompat.checkSelfPermission(
@@ -81,25 +108,22 @@ class AuthViewModel @Inject constructor(
             val coarse = ContextCompat.checkSelfPermission(
                 context, android.Manifest.permission.ACCESS_COARSE_LOCATION
             ) == PackageManager.PERMISSION_GRANTED
-
-            if (fine || coarse) {
-                val loc = fused.lastLocation.await()
-                if (loc != null) GeoPoint(loc.latitude, loc.longitude) else null
-            } else null
+            if (!(fine || coarse)) null
+            else {
+                runCatching { fused.lastLocation.await() }.getOrNull()?.let {
+                    GeoPoint(it.latitude, it.longitude)
+                }
+            }
         } catch (_: Exception) { null }
 
-        val withLoc = list.filter { it.location != null }
-        if (withLoc.isEmpty()) return null
-
-        return if (here != null) {
-            withLoc.minByOrNull { distanceKm(here, it.location!!) }?.id
+        return@withContext if (here != null) {
+            branchesWithLoc.minByOrNull { distanceKm(here, it.location!!) }?.id
         } else {
-            // Fallback: first active branch
-            withLoc.first().id
+            branchesWithLoc.first().id
         }
     }
 
-    /** Best-effort reverse geocode last location to an address string. */
+    /** Best-effort reverse geocode last location to an address; never throws. */
     suspend fun prefillAddressFromLocation(): String? = withContext(Dispatchers.IO) {
         try {
             val fine = ContextCompat.checkSelfPermission(
@@ -109,9 +133,17 @@ class AuthViewModel @Inject constructor(
                 context, android.Manifest.permission.ACCESS_COARSE_LOCATION
             ) == PackageManager.PERMISSION_GRANTED
             if (!fine && !coarse) return@withContext null
-            val loc = fused.lastLocation.await() ?: return@withContext null
+
+            val loc = runCatching { fused.lastLocation.await() }.getOrNull() ?: return@withContext null
+
+            if (!Geocoder.isPresent()) return@withContext null
+
             val geocoder = Geocoder(context, Locale.getDefault())
-            val results = geocoder.getFromLocation(loc.latitude, loc.longitude, 1)
+            val results = runCatching {
+                @Suppress("DEPRECATION")
+                geocoder.getFromLocation(loc.latitude, loc.longitude, 1)
+            }.getOrNull()
+
             val a = results?.firstOrNull() ?: return@withContext null
             listOfNotNull(
                 a.featureName,
@@ -119,7 +151,7 @@ class AuthViewModel @Inject constructor(
                 a.locality,
                 a.adminArea,
                 a.postalCode
-            ).distinct().joinToString(", ")
+            ).distinct().joinToString(", ").ifBlank { null }
         } catch (_: Exception) {
             null
         }

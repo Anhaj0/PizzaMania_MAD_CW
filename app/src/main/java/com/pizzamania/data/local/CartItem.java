@@ -19,13 +19,11 @@ public class CartItem {
     /** unit price after size/extras have been applied */
     public double price;
     public int qty;
-
     @Nullable public String imageUrl;
 
     // Options
     /** "S","M","L" — never null (default "M") */
     public String size;
-
     /** comma-separated list: "Extra Cheese,Olives" (nullable = no extras) */
     @Nullable public String extrasCsv;
 
@@ -34,18 +32,9 @@ public class CartItem {
         this.size = "M";
     }
 
-    /** Convenience constructor for your own inserts/updates */
+    /** Convenience constructor for creating copies or new items */
     @Ignore
-    public CartItem(
-            String itemId,
-            String branchId,
-            String name,
-            double price,
-            int qty,
-            @Nullable String imageUrl,
-            String size,
-            @Nullable String extrasCsv
-    ) {
+    public CartItem(String itemId, String branchId, String name, double price, int qty, @Nullable String imageUrl, String size, @Nullable String extrasCsv) {
         this.itemId = itemId;
         this.branchId = branchId;
         this.name = name;

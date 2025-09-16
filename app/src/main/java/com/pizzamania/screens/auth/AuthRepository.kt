@@ -13,6 +13,7 @@ class AuthRepository @Inject constructor(
     private val auth: FirebaseAuth,
     private val db: FirebaseFirestore
 ) {
+
     suspend fun signUp(
         name: String,
         email: String,
@@ -21,38 +22,50 @@ class AuthRepository @Inject constructor(
         address: String
     ): User {
         val e = email.trim().lowercase()
-        auth.createUserWithEmailAndPassword(e, password).await()
-        val uid = auth.currentUser!!.uid
-        val user = User(uid, e, name.trim(), "USER")
-        // Save profile fields too
-        db.collection("users").document(uid).set(
-            mapOf(
-                "uid" to uid,
-                "email" to e,
-                "name" to name.trim(),
-                "role" to "USER",
-                "phone" to phone.trim(),
-                "address" to address.trim()
-            ),
-            SetOptions.merge()
-        ).await()
-        return user
+
+        // Create account
+        val result = auth.createUserWithEmailAndPassword(e, password).await()
+        val uid = result.user?.uid ?: auth.currentUser?.uid
+        ?: throw IllegalStateException("Sign up succeeded but no user session was returned")
+
+        // Write profile (merge)
+        val profile = mapOf(
+            "uid" to uid,
+            "email" to e,
+            "name" to name.trim().ifBlank { e.substringBefore('@') },
+            "role" to "USER",
+            "phone" to phone.trim(),
+            "address" to address.trim()
+        )
+        val docRef = db.collection("users").document(uid)
+        docRef.set(profile, SetOptions.merge()).await()
+
+        // Read back as model (avoids constructor mismatch)
+        return docRef.get().await().toObject(User::class.java)
+            ?: throw IllegalStateException("Failed to parse user profile")
     }
 
-    suspend fun signIn(email: String, password: String): User? {
+    suspend fun signIn(email: String, password: String): User {
         val e = email.trim().lowercase()
-        auth.signInWithEmailAndPassword(e, password).await()
-        val uid = auth.currentUser?.uid ?: return null
+        val result = auth.signInWithEmailAndPassword(e, password).await()
+        val uid = result.user?.uid ?: auth.currentUser?.uid
+        ?: throw IllegalStateException("Sign in succeeded but no user session was returned")
 
         val docRef = db.collection("users").document(uid)
-        val doc = docRef.get().await()
-        val existing = doc.toObject(User::class.java)
+        val snap = docRef.get().await()
+        val existing = snap.toObject(User::class.java)
         if (existing != null) return existing
 
-        // If user doc missing (old accounts), create a minimal one.
-        val fallback = User(uid, e, auth.currentUser?.displayName ?: e.substringBefore('@'), "USER")
-        docRef.set(fallback, SetOptions.merge()).await()
-        return fallback
+        // Create minimal doc if missing, then read back
+        val minimal = mapOf(
+            "uid" to uid,
+            "email" to e,
+            "name" to (auth.currentUser?.displayName?.takeIf { it.isNotBlank() } ?: e.substringBefore('@')),
+            "role" to "USER"
+        )
+        docRef.set(minimal, SetOptions.merge()).await()
+        return docRef.get().await().toObject(User::class.java)
+            ?: throw IllegalStateException("Failed to create user profile")
     }
 
     fun signOut() = auth.signOut()

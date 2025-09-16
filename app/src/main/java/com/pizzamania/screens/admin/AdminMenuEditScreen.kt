@@ -18,6 +18,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import com.pizzamania.data.model.MenuItem
 import com.pizzamania.data.repo.MenuRepository
+import com.pizzamania.util.toDirectImageUrl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -72,7 +73,7 @@ fun AdminMenuEditScreen(
             title = it.title ?: ""
             desc = it.description ?: ""
             price = if (it.price == 0.0) "" else it.price.toString()
-            available = it.isAvailable
+            available = it.available
             imageUrl = it.imageUrl ?: ""
         }
     }
@@ -80,7 +81,6 @@ fun AdminMenuEditScreen(
     fun toast(s: String) = Toast.makeText(ctx, s, Toast.LENGTH_SHORT).show()
 
     fun sanitizePrice(input: String): String {
-        // allow digits and a single dot; trim leading dot to "0."
         val filtered = input.filter { it.isDigit() || it == '.' }
         var dotSeen = false
         val sb = StringBuilder()
@@ -146,9 +146,9 @@ fun AdminMenuEditScreen(
                 Switch(checked = available, onCheckedChange = { available = it })
             }
             OutlinedTextField(
-                value = imageUrl, onValueChange = { imageUrl = it.trim() },
-                label = { Text("Image URL (paste)") },
-                placeholder = { Text("https://.../photo.jpg") },
+                value = imageUrl, onValueChange = { imageUrl = it },
+                label = { Text("Image URL (paste Google Drive link OK)") },
+                placeholder = { Text("https://drive.google.com/file/d/…/view?usp=sharing") },
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -165,13 +165,17 @@ fun AdminMenuEditScreen(
                             return@Button
                         }
 
+                        // ✅ normalize Google Drive share links to direct image URL automatically
+                        val normalizedUrl = toDirectImageUrl(imageUrl.trim())
+
                         val built = MenuItem(
-                            itemId ?: "",
-                            title.trim(),
-                            desc.trim().ifBlank { null },
-                            priceD,
-                            available,
-                            imageUrl.ifBlank { null }
+                            id = itemId ?: "",
+                            title = title.trim(),
+                            description = desc.trim().ifBlank { null },
+                            price = priceD,
+                            available = available,
+                            imageUrl = normalizedUrl?.ifBlank { null },
+                            category = vm.existing?.category ?: "pizza"
                         )
 
                         if (itemId == null) {

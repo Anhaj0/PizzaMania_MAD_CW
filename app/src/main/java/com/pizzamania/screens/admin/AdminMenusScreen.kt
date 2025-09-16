@@ -17,6 +17,7 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.pizzamania.data.model.MenuItem
 import com.pizzamania.data.repo.MenuRepository
+import com.pizzamania.util.toDirectImageUrl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -81,7 +82,7 @@ fun AdminMenusScreen(
                 Text("Error: ${vm.error}", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
             }
             LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(vm.items) { m ->
+                items(vm.items, key = { it.id ?: it.title ?: it.hashCode().toString() }) { m ->
                     val title = m.title ?: "Untitled"
                     ElevatedCard(
                         modifier = Modifier
@@ -90,14 +91,14 @@ fun AdminMenusScreen(
                     ) {
                         Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             AsyncImage(
-                                model = m.imageUrl,
+                                model = toDirectImageUrl(m.imageUrl),
                                 contentDescription = null,
                                 modifier = Modifier.size(56.dp)
                             )
                             Column(Modifier.weight(1f)) {
                                 Text(title, style = MaterialTheme.typography.titleMedium)
-                                Text("Rs. ${m.price}", style = MaterialTheme.typography.bodyMedium)
-                                if (!m.isAvailable) Text("Unavailable", color = MaterialTheme.colorScheme.error)
+                                Text("Rs. ${"%.2f".format(m.price)}", style = MaterialTheme.typography.bodyMedium)
+                                if (!m.available) Text("Unavailable", color = MaterialTheme.colorScheme.error)
                             }
                         }
                     }

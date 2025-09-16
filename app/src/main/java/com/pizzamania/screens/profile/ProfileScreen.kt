@@ -1,150 +1,133 @@
 package com.pizzamania.screens.profile
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.SetOptions
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import javax.inject.Inject
 import androidx.navigation.NavController
+import com.pizzamania.data.model.UserProfile
+import com.pizzamania.data.repo.ProfileRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
-    private val db: FirebaseFirestore,
-    private val auth: FirebaseAuth
+    private val repo: ProfileRepository
 ) : ViewModel() {
-    suspend fun load(): Triple<String?, String?, String?>? {
-        val uid = auth.currentUser?.uid ?: return null
-        val doc = db.collection("users").document(uid).get().await()
-        return Triple(doc.getString("name"), doc.getString("phone"), doc.getString("address"))
-    }
-    suspend fun save(name: String, phone: String, address: String) {
-        val uid = auth.currentUser?.uid ?: return
-        db.collection("users").document(uid)
-            .set(mapOf("name" to name, "phone" to phone, "address" to address), SetOptions.merge())
-            .await()
-    }
-    suspend fun deleteAccount(): String? {
-        val user = auth.currentUser ?: return "Not signed in"
-        // Best-effort delete Firestore doc
-        runCatching { db.collection("users").document(user.uid).delete().await() }
-        return runCatching { user.delete().await(); null }
-            .getOrElse { e -> e.message ?: "Delete failed. Re-login and try again." }
+
+    private val uid: String? = try {
+        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+    } catch (_: Throwable) { null }
+
+    val profile: StateFlow<UserProfile?> = flow {
+        emit(repo.get(uid))
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
+
+    fun save(name: String, phone: String, address: String, onDone: (Boolean) -> Unit) {
+        val u = uid
+        if (u.isNullOrBlank()) { onDone(false); return }
+        viewModelScope.launch {
+            try {
+                repo.save(UserProfile(uid = u, name = name.trim(), phone = phone.trim(), address = address.trim()))
+                onDone(true)
+            } catch (_: Throwable) {
+                onDone(false)
+            }
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(nav: NavController, vm: ProfileViewModel = hiltViewModel()) {
-    var name by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
-    var address by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(true) }
-    var showConfirmDelete by remember { mutableStateOf(false) }
+fun ProfileScreen(
+    navController: NavController,
+    vm: ProfileViewModel = hiltViewModel()
+) {
     val scope = rememberCoroutineScope()
-    val snack = remember { SnackbarHostState() }
+    val snackbar = remember { SnackbarHostState() }
+    val p by vm.profile.collectAsState()
 
-    LaunchedEffect(Unit) {
-        val data = vm.load()
-        name = data?.first ?: ""
-        phone = data?.second ?: ""
-        address = data?.third ?: ""
-        loading = false
-    }
+    var name by remember(p) { mutableStateOf(p?.name ?: "") }
+    var phone by remember(p) { mutableStateOf(p?.phone ?: "") }
+    var address by remember(p) { mutableStateOf(p?.address ?: "") }
+    var saving by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Your profile") },
+                title = { Text("Profile") },
                 navigationIcon = {
-                    IconButton(onClick = { nav.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
         },
-        snackbarHost = { SnackbarHost(snack) }
+        snackbarHost = { SnackbarHost(snackbar) }
     ) { inner ->
         Column(
-            Modifier
+            modifier = Modifier
                 .padding(inner)
                 .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+                .fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (loading) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-            OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(
-                value = phone,
-                onValueChange = { phone = it.filter { c -> c.isDigit() || c == '+' || c == ' ' } },
-                label = { Text("Phone") },
-                singleLine = true,
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Phone),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                value = name, onValueChange = { name = it },
+                label = { Text("Name") }, singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
             )
-            OutlinedTextField(address, { address = it }, label = { Text("Address") }, minLines = 3, modifier = Modifier.fillMaxWidth())
-
+            OutlinedTextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = phone, onValueChange = { phone = it.filter { ch -> ch.isDigit() || ch == '+' } },
+                label = { Text("Phone") }, singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next
+                )
+            )
+            OutlinedTextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = address, onValueChange = { address = it },
+                label = { Text("Address") }, minLines = 3
+            )
+            Spacer(Modifier.height(8.dp))
             Button(
                 onClick = {
-                    loading = true
-                    scope.launch {
-                        vm.save(name.trim(), phone.trim(), address.trim())
-                        loading = false
-                        nav.popBackStack()
+                    if (name.isBlank() || phone.isBlank() || address.isBlank()) {
+                        scope.launch { snackbar.showSnackbar("Please fill all fields.") }
+                        return@Button
                     }
-                },
-                enabled = !loading && name.isNotBlank(),
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("Save") }
-
-            Spacer(Modifier.height(12.dp))
-            OutlinedButton(
-                onClick = { showConfirmDelete = true },
-                enabled = !loading,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-            ) { Text("Delete account") }
-        }
-    }
-
-    if (showConfirmDelete) {
-        AlertDialog(
-            onDismissRequest = { showConfirmDelete = false },
-            title = { Text("Delete account?") },
-            text = { Text("This will permanently remove your account.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showConfirmDelete = false
-                    scope.launch {
-                        val err = vm.deleteAccount()
-                        if (err == null) {
-                            snack.showSnackbar("Account deleted")
-                            nav.popBackStack() // back to previous (likely menu → will send to auth on actions)
-                        } else {
-                            snack.showSnackbar(err)
+                    saving = true
+                    vm.save(name, phone, address) { ok ->
+                        saving = false
+                        scope.launch {
+                            snackbar.showSnackbar(if (ok) "Profile saved" else "Failed to save")
+                            if (ok) navController.popBackStack()
                         }
                     }
-                }) { Text("Delete") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showConfirmDelete = false }) { Text("Cancel") }
+                },
+                enabled = !saving,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (saving) {
+                    CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp).padding(end = 8.dp))
+                }
+                Text("Save")
             }
-        )
+        }
     }
 }

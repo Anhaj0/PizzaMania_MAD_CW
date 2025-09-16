@@ -16,8 +16,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.tasks.await
 import com.pizzamania.navigation.Routes
+import kotlinx.coroutines.tasks.await
 
 @Composable
 fun HomeScreen(navController: NavController, vm: HomeViewModel = hiltViewModel()) {
@@ -73,7 +73,7 @@ fun HomeScreen(navController: NavController, vm: HomeViewModel = hiltViewModel()
                 Text(nearest.name)
                 state.distanceKm?.let { Text(String.format("Distance: %.2f km", it)) }
                 Spacer(Modifier.height(16.dp))
-                Button(onClick = { navController.navigate("menu/${nearest.id}") }) {
+                Button(onClick = { navController.navigate(Routes.BranchMenu(nearest.id)) }) {
                     Text("View ${nearest.name} menu")
                 }
                 Spacer(Modifier.height(8.dp))

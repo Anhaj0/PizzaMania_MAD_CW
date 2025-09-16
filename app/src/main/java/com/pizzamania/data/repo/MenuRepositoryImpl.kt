@@ -19,25 +19,31 @@ class MenuRepositoryImpl @Inject constructor(
         .document(branchId)
         .collection("menuItems")
 
-    /** Patch legacy docs (fallback title from "name", ensure id). */
+    /** Create a clean MenuItem without mutating Firestore objects. */
     private fun patched(doc: DocumentSnapshot): MenuItem {
-        val item = doc.toObject(MenuItem::class.java) ?: MenuItem()
+        val raw = doc.toObject(MenuItem::class.java)
 
-        // Ensure id
-        val id = item.id?.trim().orEmpty()
-        if (id.isEmpty()) item.id = doc.id
+        // Pull fields with fallbacks (support legacy "name" → title)
+        val id = (raw?.id?.trim().takeUnless { it.isNullOrEmpty() } ?: doc.id)
+        val title = (raw?.title?.trim()
+            ?: doc.getString("title")?.trim()
+            ?: doc.getString("name")?.trim()
+            ?: "Untitled")
+        val description = raw?.description
+        val price = raw?.price?.takeUnless { it.isNaN() } ?: 0.0
+        val available = raw?.available ?: false // default false if missing
+        val imageUrl = raw?.imageUrl
+        val category = (raw?.category ?: doc.getString("category") ?: "pizza")
 
-        // Ensure title (fallback from legacy "name")
-        val title = item.title?.trim().orEmpty()
-        if (title.isEmpty()) {
-            val fromDoc = (doc.getString("title") ?: doc.getString("name"))?.trim()
-            item.title = if (fromDoc.isNullOrBlank()) "Untitled" else fromDoc
-        }
-
-        // Ensure price is not NaN (rare malformed docs)
-        if (java.lang.Double.isNaN(item.price)) item.price = 0.0
-
-        return item
+        return MenuItem(
+            id = id,
+            title = title,
+            description = description,
+            price = price,
+            available = available,
+            imageUrl = imageUrl,
+            category = category
+        )
     }
 
     override fun listenMenu(branchId: String): Flow<List<MenuItem>> = callbackFlow {
@@ -53,28 +59,29 @@ class MenuRepositoryImpl @Inject constructor(
 
     override suspend fun addMenuItem(branchId: String, item: MenuItem) {
         val newId = item.id?.trim().orEmpty().ifBlank { col(branchId).document().id }
-        val ref = col(branchId).document(newId)
         val toSave = MenuItem(
-            newId,
-            (item.title ?: "").ifBlank { "Untitled" },
-            item.description,
-            item.price,
-            item.isAvailable,
-            item.imageUrl
+            id = newId,
+            title = (item.title ?: "").ifBlank { "Untitled" },
+            description = item.description,
+            price = item.price.takeUnless { it.isNaN() } ?: 0.0,
+            available = item.available,
+            imageUrl = item.imageUrl,
+            category = item.category ?: "pizza"
         )
-        ref.set(toSave).await()
+        col(branchId).document(newId).set(toSave).await()
     }
 
     override suspend fun updateMenuItem(branchId: String, item: MenuItem) {
         val id = item.id?.trim().orEmpty()
         require(id.isNotBlank()) { "item.id missing" }
         val toSave = MenuItem(
-            id,
-            (item.title ?: "").ifBlank { "Untitled" },
-            item.description,
-            item.price,
-            item.isAvailable,
-            item.imageUrl
+            id = id,
+            title = (item.title ?: "").ifBlank { "Untitled" },
+            description = item.description,
+            price = item.price.takeUnless { it.isNaN() } ?: 0.0,
+            available = item.available,
+            imageUrl = item.imageUrl,
+            category = item.category ?: "pizza"
         )
         col(branchId).document(id).set(toSave).await()
     }

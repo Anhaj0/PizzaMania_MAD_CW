@@ -16,14 +16,16 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.firestore.Query
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
+
+/* ---------- models ---------- */
 
 data class UserOrder(
     val id: String,
@@ -40,6 +42,8 @@ data class OrdersUiState(
     val orders: List<UserOrder> = emptyList()
 )
 
+/* ---------- ViewModel (no composite index required) ---------- */
+
 @HiltViewModel
 class TrackOrdersViewModel @Inject constructor(
     private val db: FirebaseFirestore,
@@ -51,16 +55,18 @@ class TrackOrdersViewModel @Inject constructor(
 
     private var reg: ListenerRegistration? = null
 
-    init { listen() }
+    init {
+        listen()
+    }
 
     private fun listen() {
         val uid = auth.currentUser?.uid ?: run {
             _state.value = OrdersUiState(loading = false, error = "Not signed in")
             return
         }
-        val q = db.collection("orders")
-            .whereEqualTo("userId", uid)
-            .orderBy("placedAt", Query.Direction.DESCENDING)
+
+        // Dropped orderBy("placedAt") to avoid composite index requirement.
+        val q = db.collection("orders").whereEqualTo("userId", uid)
 
         _state.update { it.copy(loading = true, error = null) }
         reg?.remove()
@@ -69,6 +75,7 @@ class TrackOrdersViewModel @Inject constructor(
                 _state.value = OrdersUiState(loading = false, error = err.message)
                 return@addSnapshotListener
             }
+
             val list = snap?.documents?.map { d ->
                 UserOrder(
                     id = d.id,
@@ -79,6 +86,8 @@ class TrackOrdersViewModel @Inject constructor(
                     branchId = d.getString("branchId") ?: ""
                 )
             }.orEmpty()
+                .sortedByDescending { it.placedAt } // client-side sort
+
             _state.value = OrdersUiState(loading = false, orders = list)
         }
     }
@@ -89,6 +98,8 @@ class TrackOrdersViewModel @Inject constructor(
         super.onCleared()
     }
 }
+
+/* ---------- UI ---------- */
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,9 +123,13 @@ fun TrackOrdersScreen(
     ) { inner ->
         when {
             s.loading -> Box(
-                Modifier.fillMaxSize().padding(inner),
+                Modifier
+                    .fillMaxSize()
+                    .padding(inner),
                 contentAlignment = Alignment.Center
-            ) { CircularProgressIndicator() }
+            ) {
+                CircularProgressIndicator()
+            }
 
             s.error != null -> Text(
                 "Error: ${s.error}",
@@ -129,7 +144,9 @@ fun TrackOrdersScreen(
             else -> {
                 val fmt = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(inner),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(inner),
                     contentPadding = PaddingValues(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -137,10 +154,16 @@ fun TrackOrdersScreen(
                     val past = s.orders.filter { it.status == "DELIVERED" || it.status == "CANCELLED" }
                     items(ongoing + past, key = { it.id }) { o ->
                         ElevatedCard(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("Order: ${o.id.take(8)}…", style = MaterialTheme.typography.titleMedium)
+                            Column(
+                                Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    "Order: ${o.id.take(8)}…",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
                                 Text("Placed: ${fmt.format(Date(o.placedAt))}")
-                                Text("Status: ${o.status.replace('_',' ')}")
+                                Text("Status: ${o.status.replace('_', ' ')}")
                                 Text("Total: Rs. ${"%.2f".format(o.total)}")
                                 if (o.items.isNotEmpty()) {
                                     Text("Items:")
